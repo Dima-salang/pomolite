@@ -39,8 +39,8 @@ var startCmd = &cobra.Command{
 		totalWorkDuration := time.Duration(minutes) * time.Minute
 		totalBreakDuration := time.Duration(breakMinutes) * time.Minute
 
-		m := timer.NewPomoModel(totalWorkDuration, totalBreakDuration, label, storage)
-		p := tea.NewProgram(m)
+		m := timer.NewMainModel(totalWorkDuration, totalBreakDuration, label, storage)
+		p := tea.NewProgram(m, tea.WithAltScreen())
 
 		if _, err := p.Run(); err != nil {
 			fmt.Printf("Alas, there's been an error: %v", err)
