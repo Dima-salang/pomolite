@@ -45,6 +45,12 @@ var (
 			Foreground(lipgloss.Color(gray)).
 			MarginTop(1)
 
+	promptStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(accentColor)).
+			Bold(true).
+			MarginTop(1).
+			MarginBottom(1)
+
 	headerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(primaryColor)).
 			Bold(true).
