@@ -2,10 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Dima-salang/pomolite/timer"
-	"github.com/eiannone/keyboard"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +29,6 @@ var startCmd = &cobra.Command{
 		if !timer.CheckInput(minutes, breakMinutes) {
 			return
 		}
-		var storage timer.Storage
 		storage, err := timer.NewSQLiteStorage("./pomodoro.db")
 
 		if err != nil {
@@ -37,20 +37,15 @@ var startCmd = &cobra.Command{
 		}
 		defer storage.Close()
 
-		totalWorkDuration := time.Duration(minutes)*time.Minute
+		totalWorkDuration := time.Duration(minutes) * time.Minute
 		totalBreakDuration := time.Duration(breakMinutes) * time.Minute
 
-		pt := timer.NewPomodoroTimer(totalWorkDuration, totalBreakDuration, label)
-		go timer.ListenForCommands(pt.ControlChan)
+		m := timer.NewMainModel(totalWorkDuration, totalBreakDuration, label, storage)
+		p := tea.NewProgram(m, tea.WithAltScreen())
 
-		defer keyboard.Close()
-		for {
-			ok := pt.Start()
-			if !ok {
-				pt.EndTime = time.Now()
-				storage.SaveTimerData(pt.WorkLabel, pt.StartTime, pt.EndTime)
-				return
-			}
+		if _, err := p.Run(); err != nil {
+			fmt.Printf("Alas, there's been an error: %v", err)
+			os.Exit(1)
 		}
 	},
 }

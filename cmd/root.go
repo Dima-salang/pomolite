@@ -6,22 +6,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
+	"github.com/Dima-salang/pomolite/timer"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
-
-const asciiArt = `
-
-██████╗  ██████╗ ███╗   ███╗ ██████╗ ██╗     ██╗████████╗███████╗
-██╔══██╗██╔═══██╗████╗ ████║██╔═══██╗██║     ██║╚══██╔══╝██╔════╝
-██████╔╝██║   ██║██╔████╔██║██║   ██║██║     ██║   ██║   █████╗  
-██╔═══╝ ██║   ██║██║╚██╔╝██║██║   ██║██║     ██║   ██║   ██╔══╝  
-██║     ╚██████╔╝██║ ╚═╝ ██║╚██████╔╝███████╗██║   ██║   ███████╗
-╚═╝      ╚═════╝ ╚═╝     ╚═╝ ╚═════╝ ╚══════╝╚═╝   ╚═╝   ╚══════╝
-                                                                 
-
-
-`
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -44,10 +34,24 @@ To quit the Pomodoro Timer and save it for stats, press 'q'.
 
 Developed by PUTAN LUIS GABRIELLE <luisgabrielle1026@gmail.com>
 
-#######################################################################################`, asciiArt),
-	// Uncomment the following line if your bare application
-	// has an action associated with it:
-	// Run: func(cmd *cobra.Command, args []string) { },
+#######################################################################################`, timer.ASCIIArt),
+	Run: func(cmd *cobra.Command, args []string) {
+		storage, err := timer.NewSQLiteStorage("./pomodoro.db")
+		if err != nil {
+			fmt.Println("Error: ", err)
+			return
+		}
+		defer storage.Close()
+
+		// Default values for home page if started from here
+		m := timer.NewMainModel(30*time.Minute, 5*time.Minute, "Work", storage)
+		p := tea.NewProgram(m, tea.WithAltScreen())
+
+		if _, err := p.Run(); err != nil {
+			fmt.Printf("Alas, there's been an error: %v", err)
+			os.Exit(1)
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -70,5 +74,3 @@ func init() {
 	// when this action is called directly.
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 }
-
-
