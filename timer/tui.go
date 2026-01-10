@@ -221,7 +221,10 @@ func (m PomoModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
 		if !m.isBreak {
-			m.storage.SaveTimerData(m.label, m.startTime, time.Now())
+			err := m.storage.SaveTimerData(m.label, m.startTime, time.Now())
+			if err != nil {
+				fmt.Println("Error saving timer data:", err)
+			}
 		}
 		m.quitting = true
 		return m, nil
@@ -244,7 +247,10 @@ func (m PomoModel) handleTick() (tea.Model, tea.Cmd) {
 	m.remaining -= time.Second
 	if m.remaining <= 0 {
 		if !m.isBreak {
-			m.storage.SaveTimerData(m.label, m.startTime, time.Now())
+			err := m.storage.SaveTimerData(m.label, m.startTime, time.Now())
+			if err != nil {
+				fmt.Println("Error saving timer data:", err)
+			}
 			m.isBreak = true
 			m.remaining = m.breakDuration
 			m.duration = m.breakDuration
