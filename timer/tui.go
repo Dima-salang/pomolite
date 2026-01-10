@@ -186,7 +186,7 @@ func NewPomoModel(workDuration, breakDuration time.Duration, label string, stora
 		breakDuration: breakDuration,
 		startTime:     time.Now(),
 		storage:       storage,
-		progress:      progress.New(progress.WithDefaultGradient()),
+		progress:      progress.New(progress.WithDefaultGradient(), progress.WithWidth(maxWidth)),
 	}
 }
 
@@ -267,15 +267,28 @@ func (m PomoModel) View() string {
 		status = "Paused"
 	}
 
+	// Format time: MM:SS
+	mins := int(m.remaining.Minutes())
+	secs := int(m.remaining.Seconds()) % 60
+	timeStr := fmt.Sprintf("%02d:%02d", mins, secs)
+	bigTime := renderBigText(timeStr)
+
 	var s strings.Builder
-	s.WriteString("\n")
-	s.WriteString(titleStyle.Render(" Pomolite "))
-	s.WriteString("\n\n")
-	s.WriteString(fmt.Sprintf("  Status: %s\n", statusStyle.Render(status)))
-	s.WriteString(fmt.Sprintf("  Phase:  %s\n", labelStyle.Render(m.label)))
-	s.WriteString(fmt.Sprintf("  Time:   %s\n\n", m.remaining.Round(time.Second).String()))
+
+	// Center the entire block
+	contentStyle := lipgloss.NewStyle().Align(lipgloss.Center)
+
+	header := titleStyle.Render(fmt.Sprintf(" %s ", strings.ToUpper(m.label)))
+	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(header) + "\n\n")
+
+	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(timerStyle.Render(bigTime)) + "\n\n")
+
 	s.WriteString("  " + m.progress.ViewAs(percent) + "\n\n")
-	s.WriteString(helpStyle.Render("  p: pause/resume • q: quit"))
+
+	statusInfo := fmt.Sprintf("Status: %s", statusStyle.Render(status))
+	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(statusInfo) + "\n\n")
+
+	s.WriteString(contentStyle.Width(m.progress.Width + 4).Render(helpStyle.Render("p: pause • r: resume • q: quit")))
 
 	return s.String()
 }

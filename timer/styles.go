@@ -1,6 +1,10 @@
 package timer
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 const (
 	primaryColor = "#7D56F4"
@@ -62,4 +66,39 @@ var (
 				Foreground(lipgloss.Color(primaryColor)).
 				Bold(true).
 				PaddingLeft(0)
+
+	timerStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(primaryColor)).
+			Bold(true).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(primaryColor)).
+			Padding(1, 4)
 )
+
+var bigDigits = map[rune][]string{
+	'0': {" ███ ", "█   █", "█   █", "█   █", " ███ "},
+	'1': {"  █  ", " ██  ", "  █  ", "  █  ", " ███ "},
+	'2': {" ███ ", "    █", "  ██ ", " █   ", " ████"},
+	'3': {" ███ ", "    █", "  ██ ", "    █", " ███ "},
+	'4': {"█   █", "█   █", " ████", "    █", "    █"},
+	'5': {"█████", "█    ", " ███ ", "    █", " ███ "},
+	'6': {" ███ ", "█    ", "████ ", "█   █", " ███ "},
+	'7': {"█████", "    █", "   █ ", "  █  ", " █   "},
+	'8': {" ███ ", "█   █", " ███ ", "█   █", " ███ "},
+	'9': {" ███ ", "█   █", " ████", "    █", " ███ "},
+	':': {"     ", "  █  ", "     ", "  █  ", "     "},
+}
+
+func renderBigText(text string) string {
+	lines := make([]string, 5)
+	for _, r := range text {
+		digit, ok := bigDigits[r]
+		if !ok {
+			continue
+		}
+		for i := 0; i < 5; i++ {
+			lines[i] += digit[i] + "  "
+		}
+	}
+	return strings.Join(lines, "\n")
+}
