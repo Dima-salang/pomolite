@@ -3,6 +3,8 @@ package timer
 import (
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -18,7 +20,21 @@ type SQLiteStorage struct {
 }
 
 func NewSQLiteStorage(path string) (*SQLiteStorage, error) {
-	db, err := sql.Open("sqlite3", path)
+	// get the user config dir
+	userConfDir, err := os.UserConfigDir()
+	if err != nil {
+		return nil, err
+	}
+
+	// create subdir
+	appPath := filepath.Join(userConfDir, "pomolite")
+	if err := os.MkdirAll(appPath, 0755); err != nil {
+		return nil, err
+	}
+
+	dbPath := filepath.Join(appPath, "pomolite.db")
+
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		return nil, err
 	}
@@ -40,7 +56,6 @@ func (s *SQLiteStorage) SaveTimerData(label string, startTime time.Time, endTime
 		VALUES (?, ?, ?)
 	`, label, startTime.Unix(), endTime.Unix())
 
-	fmt.Printf("Timer saved successfully with label: %s, start time: %s, end time: %s\n", label, startTime, endTime)
 	if err != nil {
 		return err
 	}
