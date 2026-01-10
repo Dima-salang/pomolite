@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/Dima-salang/pomolite/timer"
@@ -44,7 +45,7 @@ var startCmd = &cobra.Command{
 
 		if _, err := p.Run(); err != nil {
 			fmt.Printf("Alas, there's been an error: %v", err)
-			return
+			os.Exit(1)
 		}
 	},
 }
