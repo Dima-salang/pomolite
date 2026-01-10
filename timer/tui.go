@@ -162,18 +162,19 @@ func (m MainModel) View() string {
 }
 
 type PomoModel struct {
-	duration      time.Duration
-	remaining     time.Duration
-	label         string
-	workLabel     string
-	paused        bool
-	isBreak       bool
-	workDuration  time.Duration
-	breakDuration time.Duration
-	startTime     time.Time
-	storage       Storage
-	progress      progress.Model
-	quitting      bool
+	duration       time.Duration
+	remaining      time.Duration
+	label          string
+	workLabel      string
+	paused         bool
+	isBreak        bool
+	workDuration   time.Duration
+	breakDuration  time.Duration
+	startTime      time.Time
+	storage        Storage
+	progress       progress.Model
+	quitting       bool
+	waitingForNext bool
 }
 
 func NewPomoModel(workDuration, breakDuration time.Duration, label string, storage Storage) PomoModel {
@@ -218,6 +219,18 @@ func (m PomoModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m PomoModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.waitingForNext {
+		switch msg.String() {
+		case "y", "enter":
+			m.waitingForNext = false
+			m.paused = false
+			return m, nil
+		case "n", "q", "esc":
+			m.quitting = true
+			return m, nil
+		}
+	}
+
 	switch msg.String() {
 	case "q", "esc":
 		if !m.isBreak {
@@ -257,11 +270,15 @@ func (m PomoModel) handleTick() (tea.Model, tea.Cmd) {
 			m.label = "Break"
 			notify("Work completed!", "Good job! Take a break.")
 		} else {
-			// Instead of auto-restart, let's go back to menu or ask
+			// resume timer
+			m.isBreak = false
+			m.remaining = m.workDuration
+			m.duration = m.workDuration
+			m.label = m.workLabel
 			notify("Break completed!", "Focus session finished.")
-			m.quitting = true
-			return m, nil
 		}
+		m.paused = true
+		m.waitingForNext = true
 	}
 	return m, tick()
 }
@@ -271,6 +288,9 @@ func (m PomoModel) View() string {
 	status := "Running"
 	if m.paused {
 		status = "Paused"
+	}
+	if m.waitingForNext {
+		status = "Waiting"
 	}
 
 	// Format time: MM:SS
@@ -291,10 +311,23 @@ func (m PomoModel) View() string {
 
 	s.WriteString("  " + m.progress.ViewAs(percent) + "\n\n")
 
-	statusInfo := fmt.Sprintf("Status: %s", statusStyle.Render(status))
-	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(statusInfo) + "\n\n")
+	if m.waitingForNext {
+		nextType := "work"
+		if m.isBreak {
+			nextType = "break"
+		}
+		prompt := fmt.Sprintf("Start %s session? (y/n)", nextType)
+		s.WriteString(contentStyle.Width(m.progress.Width+4).Render(promptStyle.Render(prompt)) + "\n\n")
+	} else {
+		statusInfo := fmt.Sprintf("Status: %s", statusStyle.Render(status))
+		s.WriteString(contentStyle.Width(m.progress.Width+4).Render(statusInfo) + "\n\n")
+	}
 
-	s.WriteString(contentStyle.Width(m.progress.Width + 4).Render(helpStyle.Render("p: pause • r: resume • q: quit")))
+	helpText := "p: pause • r: resume • q: quit"
+	if m.waitingForNext {
+		helpText = "y: start • n: main menu"
+	}
+	s.WriteString(contentStyle.Width(m.progress.Width + 4).Render(helpStyle.Render(helpText)))
 
 	return s.String()
 }
