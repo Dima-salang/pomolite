@@ -1,11 +1,13 @@
-package cmd
+package cli
 
 import (
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/Dima-salang/pomolite/timer"
+	"github.com/Dima-salang/pomolite/internal/storage"
+	"github.com/Dima-salang/pomolite/internal/timer"
+	"github.com/Dima-salang/pomolite/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 )
@@ -25,22 +27,20 @@ var startCmd = &cobra.Command{
 	-m : minutes of work
 	-b : minutes of break`,
 	Run: func(cmd *cobra.Command, args []string) {
-		// check for the validity of the input
 		if !timer.CheckInput(minutes, breakMinutes) {
 			return
 		}
-		storage, err := timer.NewSQLiteStorage("./pomodoro.db")
-
+		store, err := storage.NewSQLiteStorage("")
 		if err != nil {
 			fmt.Println("Error: ", err)
 			return
 		}
-		defer storage.Close()
+		defer store.Close()
 
 		totalWorkDuration := time.Duration(minutes) * time.Minute
 		totalBreakDuration := time.Duration(breakMinutes) * time.Minute
 
-		m := timer.NewMainModel(totalWorkDuration, totalBreakDuration, label, storage)
+		m := ui.NewMainModel(totalWorkDuration, totalBreakDuration, label, store)
 		p := tea.NewProgram(m, tea.WithAltScreen())
 
 		if _, err := p.Run(); err != nil {

@@ -1,4 +1,4 @@
-package timer
+package ui
 
 import (
 	"strings"
@@ -69,9 +69,9 @@ var (
 			PaddingLeft(2)
 
 	selectedItemStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(primaryColor)).
-				Bold(true).
-				PaddingLeft(0)
+			Foreground(lipgloss.Color(primaryColor)).
+			Bold(true).
+			PaddingLeft(0)
 
 	timerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color(primaryColor)).
@@ -79,7 +79,37 @@ var (
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(lipgloss.Color(primaryColor)).
 			Padding(1, 4)
+
+
+
+	lowPriorityStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#04B575"))
+	medPriorityStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("#FFB000"))
+	highPriorityStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#FF3B30"))
+
+	panelStyle = lipgloss.NewStyle().
+			Padding(0, 2)
+
+	panelFocusedStyle = panelStyle.Copy()
+
+	sidebarStyle = lipgloss.NewStyle()
+
+	workspaceStyle = lipgloss.NewStyle().
+			PaddingLeft(4)
+
+	columnStyle = lipgloss.NewStyle().
+			Margin(0, 2)
+
+	columnFocusedStyle = columnStyle.Copy()
+
+	cardStyle = lipgloss.NewStyle().
+			MarginBottom(1)
+
+	cardSelectedStyle = cardStyle.Copy().
+				Bold(true).
+				Foreground(lipgloss.Color(accentColor))
 )
+
+
 
 var bigDigits = map[rune][]string{
 	'0': {" ███ ", "█   █", "█   █", "█   █", " ███ "},

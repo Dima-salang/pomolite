@@ -1,23 +1,25 @@
-package timer
+package ui
 
 import (
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Dima-salang/pomolite/internal/storage"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type HistoryModel struct {
-	sessions []Session
+	sessions []storage.Session
 	err      error
 	width    int
 	height   int
 }
 
-func NewHistoryModel(storage Storage) HistoryModel {
-	sessions, err := storage.ListSessions(10) // Show last 10
+func NewHistoryModel(repo storage.Repository) HistoryModel {
+	sessions, err := repo.List(10) // Show last 10
 	return HistoryModel{
 		sessions: sessions,
 		err:      err,

@@ -1,165 +1,18 @@
-package timer
+package ui
 
 import (
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Dima-salang/pomolite/internal/storage"
 	"github.com/charmbracelet/bubbles/progress"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/gen2brain/beeep"
 )
 
-const (
-	padding  = 2
-	maxWidth = 80
-
-	viewHome    = "home"
-	viewForm    = "form"
-	viewTimer   = "timer"
-	viewStats   = "stats"
-	viewHistory = "history"
-)
-
 type tickMsg time.Time
-
-type MainModel struct {
-	state     string
-	home      HomeModel
-	form      FormModel
-	timer     PomoModel
-	stats     StatsModel
-	history   HistoryModel
-	storage   Storage
-	width     int
-	height    int
-	quitting  bool
-	workDur   time.Duration
-	breakDur  time.Duration
-	workLabel string
-}
-
-func NewMainModel(workDur, breakDur time.Duration, label string, storage Storage) MainModel {
-	return MainModel{
-		state:     viewHome,
-		home:      NewHomeModel(),
-		storage:   storage,
-		workDur:   workDur,
-		breakDur:  breakDur,
-		workLabel: label,
-	}
-}
-
-func (m MainModel) Init() tea.Cmd {
-	return nil
-}
-
-func (m MainModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "ctrl+c" {
-			return m, tea.Quit
-		}
-		if msg.String() == "q" && m.state == viewHome {
-			return m, tea.Quit
-		}
-	case tea.WindowSizeMsg:
-		m.width, m.height = msg.Width, msg.Height
-		m.home.width, m.home.height = msg.Width, msg.Height
-	case string:
-		return m.handleMenuSelection(msg)
-	case FormResultMsg:
-		return m.handleFormResult(msg)
-	}
-
-	return m.updateViewState(msg)
-}
-
-func (m MainModel) handleMenuSelection(choice string) (tea.Model, tea.Cmd) {
-	switch choice {
-	case "Start Timer":
-		m.form = NewFormModel(int(m.workDur.Minutes()), int(m.breakDur.Minutes()), m.workLabel)
-		m.state = viewForm
-		return m, m.form.Init()
-	case "Statistics":
-		m.stats = NewStatsModel(m.storage)
-		m.state = viewStats
-		return m, m.stats.Init()
-	case "History":
-		m.history = NewHistoryModel(m.storage)
-		m.state = viewHistory
-		return m, m.history.Init()
-	case "Quit":
-		m.quitting = true
-		return m, tea.Quit
-	case "home":
-		m.state = viewHome
-		return m, nil
-	}
-	return m, nil
-}
-
-func (m MainModel) handleFormResult(msg FormResultMsg) (tea.Model, tea.Cmd) {
-	m.workDur = time.Duration(msg.WorkMin) * time.Minute
-	m.breakDur = time.Duration(msg.BreakMin) * time.Minute
-	m.workLabel = msg.Label
-	m.timer = NewPomoModel(m.workDur, m.breakDur, m.workLabel, m.storage)
-	m.state = viewTimer
-	return m, m.timer.Init()
-}
-
-func (m MainModel) updateViewState(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-	switch m.state {
-	case viewHome:
-		m.home, cmd = m.home.Update(msg)
-	case viewForm:
-		m.form, cmd = m.form.Update(msg)
-	case viewTimer:
-		var newModel tea.Model
-		newModel, cmd = m.timer.Update(msg)
-		m.timer = newModel.(PomoModel)
-		if m.timer.quitting {
-			m.timer.quitting = false
-			m.state = viewHome
-			return m, nil
-		}
-	case viewStats, viewHistory:
-		if k, ok := msg.(tea.KeyMsg); ok && (k.String() == "q" || k.String() == "esc") {
-			m.state = viewHome
-			return m, nil
-		}
-		if m.state == viewStats {
-			m.stats, cmd = m.stats.Update(msg)
-		} else {
-			m.history, cmd = m.history.Update(msg)
-		}
-	}
-	return m, cmd
-}
-
-func (m MainModel) View() string {
-	if m.quitting {
-		return "\n  See you later!\n\n"
-	}
-	var content string
-	switch m.state {
-	case viewHome:
-		content = m.home.View()
-	case viewForm:
-		content = m.form.View()
-	case viewTimer:
-		content = m.timer.View()
-	case viewStats:
-		content = m.stats.View()
-	case viewHistory:
-		content = m.history.View()
-	default:
-		content = "Unknown state"
-	}
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
-}
 
 type PomoModel struct {
 	duration       time.Duration
@@ -171,13 +24,13 @@ type PomoModel struct {
 	workDuration   time.Duration
 	breakDuration  time.Duration
 	startTime      time.Time
-	storage        Storage
+	storage        storage.Repository
 	progress       progress.Model
 	quitting       bool
 	waitingForNext bool
 }
 
-func NewPomoModel(workDuration, breakDuration time.Duration, label string, storage Storage) PomoModel {
+func NewPomoModel(workDuration, breakDuration time.Duration, label string, store storage.Repository) PomoModel {
 	return PomoModel{
 		duration:      workDuration,
 		remaining:     workDuration,
@@ -186,7 +39,7 @@ func NewPomoModel(workDuration, breakDuration time.Duration, label string, stora
 		workDuration:  workDuration,
 		breakDuration: breakDuration,
 		startTime:     time.Now(),
-		storage:       storage,
+		storage:       store,
 		progress:      progress.New(progress.WithDefaultGradient(), progress.WithWidth(maxWidth)),
 	}
 }
@@ -234,7 +87,7 @@ func (m PomoModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "esc":
 		if !m.isBreak {
-			err := m.storage.SaveTimerData(m.label, m.startTime, time.Now())
+			err := m.storage.Save(m.label, m.startTime, time.Now())
 			if err != nil {
 				fmt.Println("Error saving timer data:", err)
 			}
@@ -260,7 +113,7 @@ func (m PomoModel) handleTick() (tea.Model, tea.Cmd) {
 	m.remaining -= time.Second
 	if m.remaining <= 0 {
 		if !m.isBreak {
-			err := m.storage.SaveTimerData(m.label, m.startTime, time.Now())
+			err := m.storage.Save(m.label, m.startTime, time.Now())
 			if err != nil {
 				fmt.Println("Error saving timer data:", err)
 			}
@@ -293,22 +146,17 @@ func (m PomoModel) View() string {
 		status = "Waiting"
 	}
 
-	// Format time: MM:SS
 	mins := int(m.remaining.Minutes())
 	secs := int(m.remaining.Seconds()) % 60
 	timeStr := fmt.Sprintf("%02d:%02d", mins, secs)
 	bigTime := renderBigText(timeStr)
 
 	var s strings.Builder
-
-	// Center the entire block
 	contentStyle := lipgloss.NewStyle().Align(lipgloss.Center)
 
 	header := titleStyle.Render(fmt.Sprintf(" %s ", strings.ToUpper(m.label)))
 	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(header) + "\n\n")
-
 	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(timerStyle.Render(bigTime)) + "\n\n")
-
 	s.WriteString("  " + m.progress.ViewAs(percent) + "\n\n")
 
 	if m.waitingForNext {

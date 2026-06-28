@@ -1,7 +1,4 @@
-/*
-Copyright © 2025 NAME HERE <EMAIL ADDRESS>
-*/
-package cmd
+package cli
 
 import (
 	"fmt"
@@ -9,19 +6,11 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/Dima-salang/pomolite/timer"
+	"github.com/Dima-salang/pomolite/internal/stats"
+	"github.com/Dima-salang/pomolite/internal/storage"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
-
-/*
-TIMEFRAME possible values:
-- all
-- today
-- week
-- month
-- year
-*/
 
 // statCmd represents the stat command
 var statCmd = &cobra.Command{
@@ -36,14 +25,14 @@ var statCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		timeframe, _ := cmd.Flags().GetString("timeframe")
 
-		storage, err := timer.NewSQLiteStorage("./pomodoro.db")
+		store, err := storage.NewSQLiteStorage("")
 		if err != nil {
 			fmt.Println(color.RedString("❌ Error opening database: %v", err))
 			return
 		}
-		defer storage.Close()
+		defer store.Close()
 
-		pomoStats, err := storage.ComputePomoStats(timeframe)
+		pomoStats, err := stats.Compute(store, timeframe)
 		if err != nil {
 			fmt.Println(color.RedString("❌ Error computing stats: %v", err))
 			return
@@ -91,16 +80,6 @@ var statCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(statCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// statCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// statCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	statCmd.Flags().StringP("timeframe", "t", "all", "timeframe for stats")
 }
 

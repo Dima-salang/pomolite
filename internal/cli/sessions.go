@@ -1,4 +1,4 @@
-package cmd
+package cli
 
 import (
 	"fmt"
@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Dima-salang/pomolite/timer"
+	"github.com/Dima-salang/pomolite/internal/storage"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
@@ -22,14 +22,14 @@ var sessionsCmd = &cobra.Command{
 	The sessions are ordered by start time in descending order.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		limit, _ := cmd.Flags().GetInt("limit")
-		storage, err := timer.NewSQLiteStorage("./pomodoro.db")
+		store, err := storage.NewSQLiteStorage("")
 		if err != nil {
 			fmt.Println(color.RedString("Error: %v", err))
 			return
 		}
-		defer storage.Close()
+		defer store.Close()
 
-		sessions, err := storage.ListSessions(limit)
+		sessions, err := store.List(limit)
 		if err != nil {
 			fmt.Println(color.RedString("Error: %v", err))
 			return
@@ -39,7 +39,6 @@ var sessionsCmd = &cobra.Command{
 			return
 		}
 
-		// Regex to strip ANSI color codes for length calculations
 		ansi := regexp.MustCompile("\x1b\\[[0-9;]*m")
 		visibleLen := func(s string) int {
 			return len([]rune(ansi.ReplaceAllString(s, "")))
@@ -52,14 +51,12 @@ var sessionsCmd = &cobra.Command{
 			return s + strings.Repeat(" ", width-v)
 		}
 
-		// Compute column widths (start/end use fixed format length 19)
 		idW := visibleLen("ID")
 		labelW := visibleLen("Label")
-		startW := visibleLen("Start Time") // header, but we'll ensure at least 19
+		startW := visibleLen("Start Time")
 		endW := visibleLen("End Time")
 		durW := visibleLen("Duration")
 
-		// Iterate to figure out max widths
 		for _, s := range sessions {
 			idStr := fmt.Sprintf("%d", s.ID)
 			if len(idStr) > idW {
@@ -76,21 +73,19 @@ var sessionsCmd = &cobra.Command{
 			if visibleLen(endStr) > endW {
 				endW = visibleLen(endStr)
 			}
-			durStr := s.EndTime.Sub(s.StartTime).Round(time.Second).String()
+			durStr := s.SessionDuration.Round(time.Second).String()
 			if visibleLen(durStr) > durW {
 				durW = visibleLen(durStr)
 			}
 		}
 
-		// Header (colored)
 		hID := color.CyanString("ID")
 		hLabel := color.CyanString("Label")
 		hStart := color.CyanString("Start Time")
 		hEnd := color.CyanString("End Time")
 		hDur := color.CyanString("Duration")
 
-		// Print header and separator
-		sepLen := idW + labelW + startW + endW + durW + 4*2 // 4 gaps of "  "
+		sepLen := idW + labelW + startW + endW + durW + 4*2
 		fmt.Printf("%s  %s  %s  %s  %s\n",
 			padRightANSI(hID, idW),
 			padRightANSI(hLabel, labelW),
@@ -100,7 +95,6 @@ var sessionsCmd = &cobra.Command{
 		)
 		fmt.Println(strings.Repeat("-", sepLen))
 
-		// Rows (alternating label color)
 		for i, s := range sessions {
 			idStr := fmt.Sprintf("%d", s.ID)
 			labelColored := color.GreenString(s.Label)
@@ -109,7 +103,7 @@ var sessionsCmd = &cobra.Command{
 			}
 			startStr := s.StartTime.Format("2006-01-02 15:04:05")
 			endStr := s.EndTime.Format("2006-01-02 15:04:05")
-			durStr := s.EndTime.Sub(s.StartTime).Round(time.Second).String()
+			durStr := s.SessionDuration.Round(time.Second).String()
 			durColored := color.MagentaString("%s", durStr)
 
 			fmt.Printf("%s  %s  %s  %s  %s\n",
@@ -121,7 +115,6 @@ var sessionsCmd = &cobra.Command{
 			)
 		}
 
-		// Footer note if --count was used
 		if limit > 0 {
 			fmt.Println()
 			fmt.Println(color.HiBlackString("Showing last %d session(s).", limit))
@@ -131,15 +124,5 @@ var sessionsCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(sessionsCmd)
-
-	// Here you will define your flags and configuration settings.
-
-	// Cobra supports Persistent Flags which will work for this command
-	// and all subcommands, e.g.:
-	// sessionsCmd.PersistentFlags().String("foo", "", "A help for foo")
-
-	// Cobra supports local flags which will only run when this command
-	// is called directly, e.g.:
-	// sessionsCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	sessionsCmd.Flags().IntP("limit", "l", 0, "number of sessions to list")
 }

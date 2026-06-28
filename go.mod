@@ -10,6 +10,7 @@ require (
 	github.com/gen2brain/beeep v0.0.0-20230907135156-1a38885a97fc
 	github.com/mattn/go-sqlite3 v1.14.32
 	github.com/spf13/cobra v1.7.0
+// sqlc
 )
 
 require (

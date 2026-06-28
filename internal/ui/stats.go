@@ -1,29 +1,27 @@
-package timer
+package ui
 
 import (
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/Dima-salang/pomolite/internal/stats"
+	"github.com/Dima-salang/pomolite/internal/storage"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 type StatsModel struct {
-	stats  *PomoStats
+	stats  *stats.PomoStats
 	err    error
 	width  int
 	height int
 }
 
-func NewStatsModel(storage Storage) StatsModel {
-	// Simple cast for now, assuming SQLiteStorage
-	s, ok := storage.(*SQLiteStorage)
-	if !ok {
-		return StatsModel{err: fmt.Errorf("invalid storage type")}
-	}
-	stats, err := s.ComputePomoStats("all")
+func NewStatsModel(repo storage.Repository) StatsModel {
+	pomoStats, err := stats.Compute(repo, "all")
 	return StatsModel{
-		stats: stats,
+		stats: pomoStats,
 		err:   err,
 	}
 }

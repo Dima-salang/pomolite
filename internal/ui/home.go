@@ -1,12 +1,12 @@
-package timer
+package ui
 
 import (
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
+
 
 type HomeModel struct {
 	choices  []string
@@ -18,7 +18,7 @@ type HomeModel struct {
 
 func NewHomeModel() HomeModel {
 	return HomeModel{
-		choices:  []string{"Start Timer", "Statistics", "History", "Quit"},
+		choices:  []string{"Start Timer", "Task Board", "Statistics", "History", "Quit"},
 		selected: make(map[int]struct{}),
 	}
 }
@@ -55,9 +55,6 @@ func (m HomeModel) selectChoice() tea.Cmd {
 func (m HomeModel) View() string {
 	var s strings.Builder
 
-	s.WriteString("\n")
-	s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(primaryColor)).Render(ASCIIArt))
-	s.WriteString("\n")
 	s.WriteString(headerStyle.Render("Main Menu"))
 	s.WriteString("\n")
 
@@ -71,9 +68,7 @@ func (m HomeModel) View() string {
 		menu.WriteString("\n")
 	}
 
-	s.WriteString(menuStyle.Render(menu.String()))
-	s.WriteString("\n\n")
-	s.WriteString(helpStyle.Render("  ↑/↓: navigate • enter: select • q: quit"))
-
+	s.WriteString(menu.String())
 	return s.String()
 }
+
