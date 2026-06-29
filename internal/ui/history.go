@@ -48,17 +48,31 @@ func (m HistoryModel) View() string {
 	} else if len(m.sessions) == 0 {
 		s.WriteString(itemStyle.Render("  No sessions found yet. Get to work!"))
 	} else {
-		var content strings.Builder
+		var tableBuilder strings.Builder
+		
+		// Header row
+		headerDate := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorMauve)).Width(18).Render("Date & Time")
+		headerLabel := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorLavender)).Width(15).Render("Session Label")
+		headerDuration := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorGreen)).Width(12).Render("Duration")
+		
+		tableBuilder.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, headerDate, headerLabel, headerDuration) + "\n")
+		tableBuilder.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorSurface)).Render(strings.Repeat("─", 45)) + "\n")
+
 		for _, sess := range m.sessions {
 			duration := sess.EndTime.Sub(sess.StartTime).Round(time.Second)
-			date := sess.StartTime.Format("Jan 02 15:04")
-			content.WriteString(fmt.Sprintf("%s │ %-10s │ %s\n", date, lipgloss.NewStyle().Foreground(lipgloss.Color(accentColor)).Render(sess.Label), duration))
+			dateStr := sess.StartTime.Format("Jan 02 15:04")
+			
+			colDate := lipgloss.NewStyle().Foreground(lipgloss.Color(colorText)).Width(18).Render(dateStr)
+			colLabel := lipgloss.NewStyle().Foreground(lipgloss.Color(colorLavender)).Width(15).Render(sess.Label)
+			colDuration := lipgloss.NewStyle().Foreground(lipgloss.Color(colorText)).Width(12).Render(duration.String())
+			
+			tableBuilder.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, colDate, colLabel, colDuration) + "\n")
 		}
-		s.WriteString(menuStyle.Render(content.String()))
+		s.WriteString(menuStyle.Render(tableBuilder.String()))
 	}
 
 	s.WriteString("\n\n")
-	s.WriteString(helpStyle.Render("  q: back to menu"))
+	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, renderHelpKey("q", "Back to Menu")))
 
 	return s.String()
 }

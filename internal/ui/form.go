@@ -151,14 +151,19 @@ func (m FormModel) View() string {
 	var s strings.Builder
 
 	s.WriteString("\n")
-	s.WriteString(headerStyle.Render("Timer Configuration"))
-	s.WriteString("\n")
+	s.WriteString(titleStyle.Render(" Timer Configuration "))
+	s.WriteString("\n\n")
 
 	var form strings.Builder
 	for i := range m.inputs {
-		form.WriteString(m.inputs[i].View())
+		if m.focused == i {
+			pointer := lipgloss.NewStyle().Foreground(lipgloss.Color(colorMauve)).Render("❯ ")
+			form.WriteString(pointer + m.inputs[i].View())
+		} else {
+			form.WriteString("  " + m.inputs[i].View())
+		}
 		if i < len(m.inputs)-1 {
-			form.WriteString("\n")
+			form.WriteString("\n\n")
 		}
 	}
 
@@ -166,7 +171,7 @@ func (m FormModel) View() string {
 
 	if m.errorMsg != "" {
 		s.WriteString("\n")
-		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Bold(true).PaddingLeft(2).Render("❌ " + m.errorMsg))
+		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed)).Bold(true).PaddingLeft(2).Render("❌ " + m.errorMsg))
 	}
 
 	s.WriteString("\n\n")

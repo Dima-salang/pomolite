@@ -9,6 +9,7 @@ import (
 	"github.com/Dima-salang/pomolite/internal/storage"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type StatsModel struct {
@@ -40,27 +41,37 @@ func (m StatsModel) View() string {
 	s.WriteString("\n")
 	s.WriteString(titleStyle.Render(" Pomolite "))
 	s.WriteString("\n\n")
-	s.WriteString(headerStyle.Render("Statistics"))
+	s.WriteString(headerStyle.Render("Statistics Overview"))
 	s.WriteString("\n")
 
 	if m.err != nil {
 		s.WriteString(fmt.Sprintf("  Error loading stats: %v\n", m.err))
 	} else if m.stats != nil {
-		content := fmt.Sprintf(
-			"  Total Sessions:     %d\n"+
-				"  Total Work:         %s\n"+
-				"  Avg Session:        %s\n"+
-				"  Longest Session:    %s\n",
-			m.stats.TotalSessions,
-			m.stats.TotalWorkDuration.Round(time.Second),
-			m.stats.AverageSessionDuration.Round(time.Second),
-			m.stats.LongestSession.Round(time.Second),
-		)
-		s.WriteString(menuStyle.Render(content))
+		cardStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color(colorSurface)).
+			Padding(1, 2).
+			Margin(0, 1).
+			Width(24)
+
+		totalSessionsVal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorMauve)).Render(fmt.Sprintf("%d", m.stats.TotalSessions))
+		totalWorkVal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorGreen)).Render(m.stats.TotalWorkDuration.Round(time.Second).String())
+		avgSessionVal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorLavender)).Render(m.stats.AverageSessionDuration.Round(time.Second).String())
+		longestSessionVal := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorPeach)).Render(m.stats.LongestSession.Round(time.Second).String())
+
+		c1 := cardStyle.Render(fmt.Sprintf("Total Sessions\n\n%s", totalSessionsVal))
+		c2 := cardStyle.Render(fmt.Sprintf("Total Focus Work\n\n%s", totalWorkVal))
+		c3 := cardStyle.Render(fmt.Sprintf("Average Session\n\n%s", avgSessionVal))
+		c4 := cardStyle.Render(fmt.Sprintf("Longest Session\n\n%s", longestSessionVal))
+
+		row1 := lipgloss.JoinHorizontal(lipgloss.Top, c1, c2)
+		row2 := lipgloss.JoinHorizontal(lipgloss.Top, c3, c4)
+
+		s.WriteString(row1 + "\n\n" + row2)
 	}
 
 	s.WriteString("\n\n")
-	s.WriteString(helpStyle.Render("  q: back to menu"))
+	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, renderHelpKey("q", "Back to Menu")))
 
 	return s.String()
 }

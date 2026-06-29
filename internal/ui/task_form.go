@@ -136,7 +136,9 @@ func (m *TaskFormModel) submit() tea.Cmd {
 		if m.isEdit {
 			err = m.repo.UpdateTask(m.task)
 		} else {
-			m.task.Status = storage.Backlog
+			if m.task.Status == "" {
+				m.task.Status = storage.Backlog
+			}
 			m.task.CreatedAt = time.Now()
 			err = m.repo.AddTask(m.task)
 		}
@@ -161,19 +163,29 @@ func (m TaskFormModel) View() string {
 
 	s.WriteString("\n")
 	if m.isEdit {
-		s.WriteString(headerStyle.Render("Edit Task"))
+		s.WriteString(titleStyle.Render(" Edit Task "))
 	} else {
-		s.WriteString(headerStyle.Render("Create Task"))
+		s.WriteString(titleStyle.Render(" Create Task "))
 	}
-	s.WriteString("\n")
+	s.WriteString("\n\n")
 
 	var form strings.Builder
 	for i := range m.inputs {
-		form.WriteString(m.inputs[i].View())
-		form.WriteString("\n")
+		if m.focused == i {
+			pointer := lipgloss.NewStyle().Foreground(lipgloss.Color(colorMauve)).Render("❯ ")
+			form.WriteString(pointer + m.inputs[i].View())
+		} else {
+			form.WriteString("  " + m.inputs[i].View())
+		}
+		form.WriteString("\n\n")
 	}
 
-	form.WriteString("Priority:    ")
+	priorityLabel := "  Priority:    "
+	if m.focused == 2 {
+		priorityLabel = lipgloss.NewStyle().Foreground(lipgloss.Color(colorMauve)).Render("❯ Priority:    ")
+	}
+	form.WriteString(priorityLabel)
+
 	priorities := []string{"Low", "Medium", "High"}
 	for idx, name := range priorities {
 		isSel := (idx == m.priorityIdx)
@@ -182,12 +194,12 @@ func (m TaskFormModel) View() string {
 		var rendered string
 		if isSel {
 			if isFocused {
-				rendered = lipgloss.NewStyle().Background(lipgloss.Color(primaryColor)).Foreground(lipgloss.Color(white)).Bold(true).Render(" " + name + " ")
+				rendered = lipgloss.NewStyle().Background(lipgloss.Color(colorMauve)).Foreground(lipgloss.Color(colorBase)).Bold(true).Render(" " + name + " ")
 			} else {
-				rendered = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(primaryColor)).Bold(true).Render(" " + name + " ")
+				rendered = lipgloss.NewStyle().Border(lipgloss.NormalBorder()).BorderForeground(lipgloss.Color(colorMauve)).Bold(true).Render(" " + name + " ")
 			}
 		} else {
-			rendered = lipgloss.NewStyle().Foreground(lipgloss.Color(gray)).Render(" " + name + " ")
+			rendered = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSubtext)).Render(" " + name + " ")
 		}
 		form.WriteString(rendered + "  ")
 	}
@@ -196,7 +208,7 @@ func (m TaskFormModel) View() string {
 
 	if m.errorMsg != "" {
 		s.WriteString("\n")
-		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Bold(true).PaddingLeft(2).Render("❌ " + m.errorMsg))
+		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed)).Bold(true).PaddingLeft(2).Render("❌ " + m.errorMsg))
 	}
 
 	s.WriteString("\n\n")

@@ -16,14 +16,15 @@ type BoardActionMsg struct {
 }
 
 type BoardModel struct {
-	repo       storage.TaskRepository
-	columns    []storage.TaskStatus
-	focusCol   int
-	focusTask  [4]int // Focus index per column
-	tasksMap   map[storage.TaskStatus][]storage.Task
-	width      int
-	height     int
-	err        error
+	repo          storage.TaskRepository
+	columns       []storage.TaskStatus
+	focusCol      int
+	focusTask     [4]int // Focus index per column
+	tasksMap      map[storage.TaskStatus][]storage.Task
+	width         int
+	height        int
+	err           error
+	trackedTaskID int
 }
 
 func NewBoardModel(repo storage.TaskRepository) BoardModel {
@@ -66,11 +67,25 @@ func (m BoardModel) Update(msg tea.Msg) (BoardModel, tea.Cmd) {
 		for _, t := range msg {
 			m.tasksMap[t.Status] = append(m.tasksMap[t.Status], t)
 		}
-		// Adjust cursor boundaries
-		for i, col := range m.columns {
-			limit := len(m.tasksMap[col])
-			if m.focusTask[i] >= limit {
-				m.focusTask[i] = max(0, limit-1)
+		
+		// If we are tracking a task, find its new index in the active column
+		if m.trackedTaskID != 0 {
+			activeCol := m.columns[m.focusCol]
+			activeTasks := m.tasksMap[activeCol]
+			for idx, t := range activeTasks {
+				if t.ID == m.trackedTaskID {
+					m.focusTask[m.focusCol] = idx
+					break
+				}
+			}
+			m.trackedTaskID = 0 // Clear tracking ID
+		} else {
+			// Adjust cursor boundaries
+			for i, col := range m.columns {
+				limit := len(m.tasksMap[col])
+				if m.focusTask[i] >= limit {
+					m.focusTask[i] = max(0, limit-1)
+				}
 			}
 		}
 		return m, nil
@@ -109,8 +124,9 @@ func (m BoardModel) Update(msg tea.Msg) (BoardModel, tea.Cmd) {
 			return m.moveTask(1)
 
 		case "a": // Add task
+			activeCol := m.columns[m.focusCol]
 			return m, func() tea.Msg {
-				return BoardActionMsg{Action: "add"}
+				return BoardActionMsg{Action: "add", Task: storage.Task{Status: activeCol}}
 			}
 
 		case "e": // Edit task
@@ -127,6 +143,25 @@ func (m BoardModel) Update(msg tea.Msg) (BoardModel, tea.Cmd) {
 			if len(activeTasks) > 0 {
 				selected := activeTasks[m.focusTask[m.focusCol]]
 				return m, m.deleteTaskCmd(selected.ID)
+			}
+
+		case "D": // Move task directly to Done board
+			activeTasks := m.tasksMap[m.columns[m.focusCol]]
+			if len(activeTasks) > 0 {
+				selected := activeTasks[m.focusTask[m.focusCol]]
+				selected.Status = storage.Done
+				selected.CompletedAt = time.Now()
+				m.trackedTaskID = selected.ID
+				m.focusCol = 3 // Done column index is 3
+				
+				cmd := func() tea.Msg {
+					err := m.repo.UpdateTask(selected)
+					if err != nil {
+						return err
+					}
+					return m.ReloadTasksCmd()()
+				}
+				return m, cmd
 			}
 		}
 	}
@@ -168,9 +203,9 @@ func (m *BoardModel) moveTask(direction int) (BoardModel, tea.Cmd) {
 		return m.ReloadTasksCmd()()
 	}
 
-	// Update focus target in the new column
+	// Update focus target in the new column and track task ID
 	m.focusCol = newColIndex
-	m.focusTask[newColIndex] = len(m.tasksMap[newStatus]) // Append to end
+	m.trackedTaskID = selected.ID
 
 	return *m, cmd
 }
@@ -194,7 +229,30 @@ func (m BoardModel) View() string {
 	s.WriteString("\n\n")
 
 	if m.err != nil {
-		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("#FF0000")).Render(fmt.Sprintf("Error: %v\n", m.err)))
+		s.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorRed)).Render(fmt.Sprintf("Error: %v\n", m.err)))
+	}
+
+	// Dynamically calculate column dimensions
+	sidebarWidth := 26
+	numCols := len(m.columns)
+	colWidth := (m.width - sidebarWidth - 10) / numCols
+	if colWidth < 18 {
+		colWidth = 18
+	}
+
+	// Total height minus padding/margins for header and help bar
+	colHeight := m.height - 6
+	if colHeight < 8 {
+		colHeight = 8
+	}
+
+	colStyle := columnStyle.Copy().Width(colWidth).Height(colHeight)
+	colFocusedStyle := columnFocusedStyle.Copy().Width(colWidth).Height(colHeight)
+
+	// Available vertical space for card rendering (each card takes approx 3-4 lines)
+	visibleLimit := (colHeight - 2) / 4
+	if visibleLimit < 1 {
+		visibleLimit = 1
 	}
 
 	var cols []string
@@ -203,64 +261,244 @@ func (m BoardModel) View() string {
 		header := strings.ToUpper(string(col))
 		tasks := m.tasksMap[col]
 
-		colHeaderStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(primaryColor))
-		colContent.WriteString(colHeaderStyle.Render(fmt.Sprintf("=== %s (%d) ===", header, len(tasks))) + "\n\n")
+		var headerStr string
+		if i == m.focusCol {
+			headerStr = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorMauve)).Render(fmt.Sprintf("❯ %s (%d)", header, len(tasks)))
+		} else {
+			headerStr = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorSubtext)).Render(fmt.Sprintf("  %s (%d)", header, len(tasks)))
+		}
+		colContent.WriteString(headerStr + "\n")
 
 		if len(tasks) == 0 {
-			colContent.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(gray)).Italic(true).Render("  (No tasks)") + "\n")
+			colContent.WriteString("\n" + lipgloss.NewStyle().Foreground(lipgloss.Color(colorSubtext)).Italic(true).Render("  (No tasks)") + "\n")
 		} else {
+			// Scrolling logic: budget heights by counting the lines of virtually rendered cards
+			maxLines := colHeight - 4
+			if maxLines < 3 {
+				maxLines = 3
+			}
+
+			focusedIdx := m.focusTask[i]
+			if focusedIdx >= len(tasks) {
+				focusedIdx = len(tasks) - 1
+			}
+			if focusedIdx < 0 {
+				focusedIdx = 0
+			}
+
+			cardLines := make([]int, len(tasks))
 			for j, t := range tasks {
-				isSelected := (i == m.focusCol && j == m.focusTask[i])
-				colContent.WriteString(m.renderTaskCard(t, isSelected) + "\n")
+				isSelected := (i == m.focusCol && j == focusedIdx)
+				cardLines[j] = strings.Count(m.renderTaskCard(t, isSelected, colWidth), "\n") + 1
+			}
+
+			startIdx := focusedIdx
+			endIdx := focusedIdx
+			totalLines := cardLines[focusedIdx]
+
+			for {
+				expanded := false
+				if startIdx > 0 && totalLines+cardLines[startIdx-1] <= maxLines {
+					startIdx--
+					totalLines += cardLines[startIdx]
+					expanded = true
+				}
+				if endIdx < len(tasks)-1 && totalLines+cardLines[endIdx+1] <= maxLines {
+					endIdx++
+					totalLines += cardLines[endIdx]
+					expanded = true
+				}
+				if !expanded {
+					break
+				}
+			}
+			endIdx++ // Exclusive bound for slicing
+
+			// Scroll Up Indicator
+			if startIdx > 0 {
+				colContent.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorMauve)).Align(lipgloss.Center).Width(colWidth - 2).Render("▲") + "\n")
+			} else {
+				colContent.WriteString("\n")
+			}
+
+			for j := startIdx; j < endIdx; j++ {
+				t := tasks[j]
+				isSelected := (i == m.focusCol && j == focusedIdx)
+				colContent.WriteString(m.renderTaskCard(t, isSelected, colWidth) + "\n")
+			}
+
+			// Scroll Down Indicator
+			if endIdx < len(tasks) {
+				colContent.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(colorMauve)).Align(lipgloss.Center).Width(colWidth - 2).Render("▼") + "\n")
 			}
 		}
 
 		if i == m.focusCol {
-			cols = append(cols, columnFocusedStyle.Render(colContent.String()))
+			cols = append(cols, colFocusedStyle.Render(colContent.String()))
 		} else {
-			cols = append(cols, columnStyle.Render(colContent.String()))
+			cols = append(cols, colStyle.Render(colContent.String()))
 		}
 	}
 
 	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, cols...))
 	s.WriteString("\n\n")
-	s.WriteString(helpStyle.Render("  h/l: focus col • j/k: focus task • H/L: move task left/right\n  a: add • e: edit • d: delete • q: main menu"))
+
+	// Helper badges in footer
+	badges := []string{
+		renderHelpKey("h/l", "Focus Column"),
+		renderHelpKey("j/k", "Cursor"),
+		renderHelpKey("H/L", "Move"),
+		renderHelpKey("a", "Add"),
+		renderHelpKey("e", "Edit"),
+		renderHelpKey("D", "Done"),
+		renderHelpKey("d", "Delete"),
+		renderHelpKey("q", "Menu"),
+	}
+	s.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, badges...))
 
 	return s.String()
 }
 
-func (m BoardModel) renderTaskCard(t storage.Task, selected bool) string {
+func (m BoardModel) renderTaskCard(t storage.Task, selected bool, colWidth int) string {
 	var card strings.Builder
 
+	var priorityName string
 	var priorityStr string
 	switch t.Priority {
 	case 1:
-		priorityStr = lowPriorityStyle.Render("Low")
+		priorityName = "Low"
+		priorityStr = lowPriorityStyle.Render(priorityName)
 	case 2:
-		priorityStr = medPriorityStyle.Render("Medium")
+		priorityName = "Med"
+		priorityStr = medPriorityStyle.Render(priorityName)
 	case 3:
-		priorityStr = highPriorityStyle.Render("High")
+		priorityName = "High"
+		priorityStr = highPriorityStyle.Render(priorityName)
 	default:
-		priorityStr = lipgloss.NewStyle().Foreground(lipgloss.Color(gray)).Render("Unknown")
+		priorityName = "None"
+		priorityStr = lipgloss.NewStyle().Foreground(lipgloss.Color(colorSubtext)).Render(priorityName)
 	}
 
 	prefix := "  "
 	if selected {
-		prefix = "▶ "
+		prefix = "❯ "
 	}
 
-	card.WriteString(fmt.Sprintf("%s[%s] %s\n", prefix, priorityStr, t.Title))
+	cardWidth := colWidth - 6
+	if cardWidth < 12 {
+		cardWidth = 12
+	}
+
+	// We reserve prefix + `[` + priority + `] ` space for title width calculation
+	indentWidth := len(prefix) + len(priorityName) + 3
+	titleWidth := cardWidth - indentWidth
+	if titleWidth < 8 {
+		titleWidth = 8
+	}
+
+	wrappedTitle := wrapText(t.Title, titleWidth)
+	titleLines := strings.Split(wrappedTitle, "\n")
+
+	// Render first line next to prefix and priority
+	firstTitleLine := titleLines[0]
+	if selected {
+		firstTitleLine = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorMauve)).Render(firstTitleLine)
+	} else {
+		firstTitleLine = lipgloss.NewStyle().Foreground(lipgloss.Color(colorText)).Render(firstTitleLine)
+	}
+	card.WriteString(fmt.Sprintf("%s[%s] %s", prefix, priorityStr, firstTitleLine))
+
+	// Subsequent lines are indented below matching the title alignment
+	indent := strings.Repeat(" ", indentWidth)
+	for k := 1; k < len(titleLines); k++ {
+		line := titleLines[k]
+		if selected {
+			line = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorMauve)).Render(line)
+		} else {
+			line = lipgloss.NewStyle().Foreground(lipgloss.Color(colorText)).Render(line)
+		}
+		card.WriteString("\n" + indent + line)
+	}
+
 	if t.Description != "" {
-		card.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(gray)).Render("    "+t.Description) + "\n")
+		descWidth := cardWidth - 4
+		if descWidth < 8 {
+			descWidth = 8
+		}
+		wrappedDesc := wrapText(t.Description, descWidth)
+		lines := strings.Split(wrappedDesc, "\n")
+		for _, line := range lines {
+			card.WriteString("\n    " + lipgloss.NewStyle().Foreground(lipgloss.Color(colorSubtext)).Render(line))
+		}
 	}
 	if !t.DueDate.IsZero() {
-		card.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(accentColor)).Render("    📅 "+t.DueDate.Format("Jan 02")) + "\n")
+		card.WriteString("\n    " + lipgloss.NewStyle().Foreground(lipgloss.Color(colorLavender)).Render("📅 "+t.DueDate.Format("Jan 02")))
 	}
 
 	if selected {
-		return cardSelectedStyle.Render(card.String())
+		return lipgloss.NewStyle().
+			Border(lipgloss.NormalBorder(), false, false, false, true).
+			BorderForeground(lipgloss.Color(colorMauve)).
+			PaddingLeft(1).
+			Render(card.String())
 	}
-	return cardStyle.Render(card.String())
+	return lipgloss.NewStyle().
+		PaddingLeft(2).
+		Render(card.String())
+}
+
+func wrapText(text string, width int) string {
+	if width <= 0 {
+		return text
+	}
+	var result []string
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		// No spaces, handle single long word
+		return wrapLongWord(text, width)
+	}
+
+	var currentLine string
+	for _, word := range words {
+		// If a single word is longer than width, wrap it by character
+		if len(word) > width {
+			if len(currentLine) > 0 {
+				result = append(result, currentLine)
+				currentLine = ""
+			}
+			parts := wrapLongWord(word, width)
+			result = append(result, parts)
+			continue
+		}
+
+		if len(currentLine)+len(word)+1 > width {
+			result = append(result, currentLine)
+			currentLine = word
+		} else {
+			if len(currentLine) == 0 {
+				currentLine = word
+			} else {
+				currentLine += " " + word
+			}
+		}
+	}
+	if len(currentLine) > 0 {
+		result = append(result, currentLine)
+	}
+	return strings.Join(result, "\n")
+}
+
+func wrapLongWord(word string, width int) string {
+	var result []string
+	runes := []rune(word)
+	for i := 0; i < len(runes); i += width {
+		end := i + width
+		if end > len(runes) {
+			end = len(runes)
+		}
+		result = append(result, string(runes[i:end]))
+	}
+	return strings.Join(result, "\n")
 }
 
 

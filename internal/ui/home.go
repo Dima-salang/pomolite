@@ -52,23 +52,34 @@ func (m HomeModel) selectChoice() tea.Cmd {
 	}
 }
 
+var choiceIcons = map[string]string{
+	"Start Timer": "⏱  Start Timer",
+	"Task Board":  "📋  Task Board",
+	"Statistics":  "📊  Statistics",
+	"History":     "📜  History",
+	"Quit":        "✖  Quit",
+}
+
 func (m HomeModel) View() string {
 	var s strings.Builder
 
 	s.WriteString(headerStyle.Render("Main Menu"))
-	s.WriteString("\n")
+	s.WriteString("\n\n")
 
-	var menu strings.Builder
 	for i, choice := range m.choices {
-		if m.cursor == i {
-			menu.WriteString(selectedItemStyle.Render(fmt.Sprintf("▶ %s", choice)))
-		} else {
-			menu.WriteString(itemStyle.Render(choice))
+		iconChoice, ok := choiceIcons[choice]
+		if !ok {
+			iconChoice = choice
 		}
-		menu.WriteString("\n")
+
+		if m.cursor == i {
+			s.WriteString(selectedItemStyle.Render(fmt.Sprintf("❯ %s", iconChoice)))
+		} else {
+			s.WriteString(itemStyle.Render(iconChoice))
+		}
+		s.WriteString("\n")
 	}
 
-	s.WriteString(menu.String())
 	return s.String()
 }
 

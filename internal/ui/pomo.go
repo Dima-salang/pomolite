@@ -40,7 +40,7 @@ func NewPomoModel(workDuration, breakDuration time.Duration, label string, store
 		breakDuration: breakDuration,
 		startTime:     time.Now(),
 		storage:       store,
-		progress:      progress.New(progress.WithDefaultGradient(), progress.WithWidth(maxWidth)),
+		progress:      progress.New(progress.WithScaledGradient(colorMauve, colorLavender), progress.WithWidth(maxWidth)),
 	}
 }
 
@@ -138,12 +138,14 @@ func (m PomoModel) handleTick() (tea.Model, tea.Cmd) {
 
 func (m PomoModel) View() string {
 	percent := 1.0 - float64(m.remaining)/float64(m.duration)
-	status := "Running"
-	if m.paused {
-		status = "Paused"
-	}
+	
+	var statusBadge string
 	if m.waitingForNext {
-		status = "Waiting"
+		statusBadge = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color(colorLavender)).Foreground(lipgloss.Color(colorBase)).Padding(0, 2).Render(" ◌ WAITING ")
+	} else if m.paused {
+		statusBadge = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color(colorPeach)).Foreground(lipgloss.Color(colorBase)).Padding(0, 2).Render(" ⏸ PAUSED ")
+	} else {
+		statusBadge = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color(colorGreen)).Foreground(lipgloss.Color(colorBase)).Padding(0, 2).Render(" ● RUNNING ")
 	}
 
 	mins := int(m.remaining.Minutes())
@@ -154,7 +156,14 @@ func (m PomoModel) View() string {
 	var s strings.Builder
 	contentStyle := lipgloss.NewStyle().Align(lipgloss.Center)
 
-	header := titleStyle.Render(fmt.Sprintf(" %s ", strings.ToUpper(m.label)))
+	var headerStyle lipgloss.Style
+	if m.isBreak {
+		headerStyle = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color(colorPeach)).Foreground(lipgloss.Color(colorBase)).Padding(0, 3)
+	} else {
+		headerStyle = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color(colorGreen)).Foreground(lipgloss.Color(colorBase)).Padding(0, 3)
+	}
+	header := headerStyle.Render(fmt.Sprintf(" %s ", strings.ToUpper(m.label)))
+	
 	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(header) + "\n\n")
 	s.WriteString(contentStyle.Width(m.progress.Width+4).Render(timerStyle.Render(bigTime)) + "\n\n")
 	s.WriteString("  " + m.progress.ViewAs(percent) + "\n\n")
@@ -167,7 +176,7 @@ func (m PomoModel) View() string {
 		prompt := fmt.Sprintf("Start %s session? (y/n)", nextType)
 		s.WriteString(contentStyle.Width(m.progress.Width+4).Render(promptStyle.Render(prompt)) + "\n\n")
 	} else {
-		statusInfo := fmt.Sprintf("Status: %s", statusStyle.Render(status))
+		statusInfo := fmt.Sprintf("Status: %s", statusBadge)
 		s.WriteString(contentStyle.Width(m.progress.Width+4).Render(statusInfo) + "\n\n")
 	}
 
